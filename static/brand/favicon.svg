@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="文档台">
+  <rect width="64" height="64" rx="15" fill="#0E7C6B"/>
+  <path d="M17 12h19l11 11v29a4 4 0 0 1-4 4H17a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z" fill="#FFFFFF"/>
+  <path d="M36 12l11 11H40a4 4 0 0 1-4-4V12z" fill="#D8ECE7"/>
+  <rect x="19" y="28" width="20" height="3.4" rx="1.7" fill="#0E7C6B"/>
+  <rect x="19" y="35.5" width="15" height="3.4" rx="1.7" fill="#2FA893"/>
+  <rect x="19" y="43" width="10" height="3.4" rx="1.7" fill="#65C3AF"/>
+  <circle cx="44" cy="45" r="9.5" fill="#0A574B" stroke="#FFFFFF" stroke-width="2.4"/>
+  <path d="M40 45l2.9 2.9 6-6.1" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

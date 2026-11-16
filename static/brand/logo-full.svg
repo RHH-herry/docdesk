@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" width="360" height="100" role="img" aria-label="文档台 DOC DESK">
+  <title>文档台 · DOC DESK</title>
+  <defs>
+    <linearGradient id="dd-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#159183"/><stop offset="0.55" stop-color="#0E7C6B"/><stop offset="1" stop-color="#0A574B"/>
+    </linearGradient>
+    <linearGradient id="dd-gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.13"/>
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="dd-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E7C6B"/><stop offset="1" stop-color="#C9DFD9"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0,6) scale(0.88)">
+    <rect width="100" height="100" rx="24" fill="url(#dd-bg)"/>
+    <rect width="100" height="100" rx="24" fill="url(#dd-gloss)"/>
+    <path d="M28 19h29l17 17v42a5 5 0 0 1-5 5H28a5 5 0 0 1-5-5V24a5 5 0 0 1 5-5z" fill="#FFFFFF"/>
+    <path d="M57 19l17 17H62a5 5 0 0 1-5-5V19z" fill="#D8ECE7"/>
+    <rect x="31" y="43" width="32" height="4.2" rx="2.1" fill="#0E7C6B"/>
+    <rect x="31" y="53.5" width="25" height="4.2" rx="2.1" fill="#2FA893" opacity="0.8"/>
+    <rect x="31" y="64" width="18" height="4.2" rx="2.1" fill="#65C3AF" opacity="0.75"/>
+    <circle cx="70" cy="72" r="14" fill="#0A574B" stroke="#FFFFFF" stroke-width="3"/>
+    <path d="M63.5 72.2l4.6 4.6 9.4-9.6" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="106" y="50" font-family="PingFang SC, Microsoft YaHei, Source Han Sans SC, sans-serif" font-size="31" font-weight="650" letter-spacing="1.5" fill="#161A22">文档台</text>
+  <text x="107" y="72" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="4.2" fill="#7C8593">DOC DESK</text>
+  <rect x="107" y="80" width="146" height="2" rx="1" fill="url(#dd-line)" opacity="0.55"/>
+</svg>

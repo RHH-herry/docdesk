@@ -1,0 +1,16 @@
+# Render Blueprint —— 连接 GitHub 仓库后一键部署
+# 用法：Render 控制台 New → Blueprint → 选择本仓库 → Apply
+services:
+  - type: web
+    name: docdesk
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.13"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    # 不设 healthCheckPath：免费层冷启动 30-60s，主动健康检查可能误判为失败

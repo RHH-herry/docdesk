@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" width="200" height="140" role="img" aria-label="导入单据并结构化">
+  <title>把单据变成结构化数据</title>
+  <defs>
+    <linearGradient id="di-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0F8F6"/><stop offset="1" stop-color="#E3F1ED"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 柔和底形 -->
+  <rect x="8" y="8" width="184" height="124" rx="24" fill="url(#di-bg)"/>
+  <circle cx="160" cy="34" r="26" fill="#FFFFFF" opacity="0.45"/>
+  <circle cx="36" cy="112" r="18" fill="#FFFFFF" opacity="0.35"/>
+
+  <!-- 后层单据 -->
+  <g opacity="0.55" transform="translate(58,16) rotate(6 44 52)">
+    <rect x="14" y="8" width="62" height="88" rx="7" fill="#FFFFFF" stroke="#C8DED8" stroke-width="2"/>
+    <rect x="24" y="26" width="34" height="4" rx="2" fill="#A9CDC4"/>
+    <rect x="24" y="38" width="40" height="4" rx="2" fill="#C4DED8"/>
+    <rect x="24" y="50" width="26" height="4" rx="2" fill="#C4DED8"/>
+  </g>
+
+  <!-- 主单据：折角 + 数据行 -->
+  <g>
+    <path d="M38 20h58l20 20v72a6 6 0 0 1-6 6H38a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z" fill="#FFFFFF" stroke="#CFE2DD" stroke-width="2"/>
+    <path d="M96 20l20 20h-14a6 6 0 0 1-6-6V20z" fill="#E3F1ED" stroke="#CFE2DD" stroke-width="2"/>
+    <rect x="44" y="52" width="50" height="5" rx="2.5" fill="#0E7C6B"/>
+    <rect x="44" y="66" width="38" height="5" rx="2.5" fill="#43AF9B" opacity="0.8"/>
+    <rect x="44" y="80" width="27" height="5" rx="2.5" fill="#7FCBBB" opacity="0.85"/>
+    <path d="M44 94h34" stroke="#DDE9E6" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- 导入箭头 -->
+  <g transform="translate(126,76)">
+    <rect x="0" y="0" width="46" height="46" rx="14" fill="#0E7C6B"/>
+    <path d="M23 12v18M16.5 24.5 23 31l6.5-6.5" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M14 35h18" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round"/>
+  </g>
+
+  <!-- 结构化结果小卡 -->
+  <g transform="translate(118,18)">
+    <rect x="0" y="0" width="34" height="30" rx="6" fill="#FFFFFF" stroke="#CFE2DD" stroke-width="2"/>
+    <rect x="7" y="8" width="20" height="3" rx="1.5" fill="#0E7C6B"/>
+    <rect x="7" y="15" width="14" height="3" rx="1.5" fill="#7FCBBB"/>
+    <circle cx="27" cy="23" r="4" fill="#0A574B"/>
+    <path d="M25 23l1.5 1.5 2.6-2.7" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

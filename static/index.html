@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="本地优先的发票 / 单据 / 票据结构化工作台 · 数据不出本机" />
+  <title>文档台 · 单据结构化工作台</title>
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg" />
+  <link rel="apple-touch-icon" href="brand/favicon-256.png" />
+  <meta name="theme-color" content="#0E7C6B" />
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    // 尽早应用主题，避免深色偏好下先闪一下白屏
+    try {
+      var t = localStorage.getItem("docdesk_theme_v1");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark"><img src="brand/logo-mark.svg" alt="文档台" width="34" height="34" /></div>
+        <div class="brand-txt">
+          <strong>文档台 <span class="ver" data-app-version>v1.2.0</span></strong>
+          <span class="brand-sub"><b>DOC DESK</b> · 单据结构化工作台</span>
+        </div>
+      </div>
+      <div class="topbar-mid">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span>本机解析 · 文件不上传 · 可离线使用</span>
+      </div>
+      <div class="topbar-right">
+        <button id="ops-btn" class="case-chip" type="button" title="客户 / 案卷 / 对账经营看板" aria-label="客户与案卷经营">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          <span>客户与案卷</span>
+        </button>
+        <button id="case-btn" class="case-chip" type="button" title="案卷 / 交付设置" aria-label="案卷设置">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span id="case-label">默认案卷</span>
+        </button>
+        <div class="mode">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <select id="mode" aria-label="解析模式">
+            <option value="auto">自动</option>
+            <option value="rules">标准解析</option>
+            <option value="llm">深度解析（本地引擎）</option>
+          </select>
+        </div>
+        <span class="status-chip" id="status-chip" title="工作区自动落盘到本机磁盘"><i></i><span id="status-text">本地运行</span></span>
+        <button id="theme-btn" class="help-btn theme-btn" type="button" title="切换深色 / 浅色主题" aria-label="切换主题">
+          <svg class="ico-moon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg class="ico-sun" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <button id="help-btn" class="help-btn" type="button" title="帮助与快捷键 (?)" aria-label="帮助与快捷键">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner" hidden>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span id="banner-txt">预览模式：启动本地服务后可解析真实文件。</span>
+    </div>
+
+    <main class="workspace">
+      <section class="pane left">
+        <div class="pane-head">
+          <h2>文件队列</h2>
+          <div class="head-actions">
+            <span id="queue-count" class="count">0</span>
+            <button id="batch-btn" class="btn ghost xs" title="给多份单据批量补录同一字段" type="button">批量填充</button>
+            <button id="clear-history" class="btn ghost xs" hidden>清空历史</button>
+          </div>
+        </div>
+        <div class="pane-tools">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="search" type="search" placeholder="搜索文件名 / 发票号" aria-label="搜索" autocomplete="off" />
+          </div>
+        </div>
+          <div id="dropzone" class="dropzone">
+          <input type="file" id="file" multiple hidden accept=".pdf,.txt,.md,.docx,.xlsx,.xlsm,.csv,.json,.html,.htm,.doc,.xls,.png,.jpg,.jpeg,.bmp,.webp" />
+          <input type="file" id="folder" webkitdirectory directory multiple hidden />
+          <div class="dz-illu"><img src="brand/illustration-docs.svg" alt="单据转为结构化数据" width="124" height="87" /></div>
+          <p class="dz-title">拖入文件，或 <span class="link">点击选择</span></p>
+          <p class="dz-sub">支持 PDF · Word · Excel · TXT · CSV · JSON · HTML · 仅在本机解析</p>
+          <button id="import-folder" type="button" class="link folder-link">导入整个文件夹</button>
+        </div>
+        <ul id="queue" class="queue"></ul>
+      </section>
+
+      <section class="pane right">
+        <div class="pane-head">
+          <h2>抽取结果</h2>
+          <div class="head-actions">
+            <div class="tpl">
+              <span class="tpl-label">单据类型</span>
+              <select id="template" aria-label="单据类型模板">
+                <option value="general">通用</option>
+                <option value="vat">增值税发票</option>
+                <option value="receipt">收据</option>
+                <option value="reimbursement">报销单</option>
+              </select>
+              <button id="tpl-manage" class="btn ghost xs" title="管理自定义模板">管理</button>
+            </div>
+            <button id="summary-btn" class="btn ghost xs" hidden>汇总</button>
+            <button id="export-all" class="btn ghost xs" hidden>合并导出</button>
+          </div>
+        </div>
+        <div class="result-area">
+          <div id="empty" class="empty">
+            <img class="empty-logo" src="brand/logo-mark.svg" alt="" width="58" height="58" />
+            <h3>还没有结果</h3>
+            <p>从左侧队列选择一份已解析的文件，<br/>或拖入新的发票 / 单据开始。</p>
+          </div>
+
+          <div id="skeleton" class="skeleton-view" hidden>
+            <div class="sk-row"><span class="sk sk-w40"></span></div>
+            <div class="sk-row"><span class="sk sk-w70"></span></div>
+            <div class="sk-row"><span class="sk sk-w55"></span></div>
+            <div class="sk-row"><span class="sk sk-w80"></span></div>
+            <div class="sk-row"><span class="sk sk-w60"></span></div>
+          </div>
+
+          <div id="result" class="result" hidden>
+            <div class="result-head">
+              <div class="rh-main">
+                <span class="rh-file-ico" id="r-file-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+                <div class="rh-id">
+                  <div class="rh-line">
+                    <span id="r-name" class="r-name"></span>
+                    <span id="r-type" class="tag"></span>
+                  </div>
+                  <div class="rh-meta" id="r-meta"></div>
+                </div>
+              </div>
+              <div class="rh-right">
+                <div class="view-toggle" id="view-toggle" role="tablist" aria-label="视图切换">
+                  <button type="button" data-view="fields" class="active" role="tab">字段表</button>
+                  <button type="button" data-view="verify" role="tab">原文对照</button>
+                </div>
+                <button id="review-btn" class="btn ghost review-btn" type="button" title="标记当前单据已人工复核">标记复核</button>
+                <button id="reparse" class="btn ghost">重新解析</button>
+              </div>
+            </div>
+
+            <div id="result-warn" class="result-warn" hidden></div>
+
+            <div class="summary" id="summary">
+              <div class="sm">
+                <span class="sm-ico sm-fields"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+                <div class="sm-txt"><span class="sm-num" id="sm-fields">0</span><label>抽取字段</label></div>
+              </div>
+              <div class="sm">
+                <span class="sm-ico sm-li"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+                <div class="sm-txt"><span class="sm-num" id="sm-li">0</span><label>明细行</label></div>
+              </div>
+              <div class="sm">
+                <span class="sm-ico sm-amount"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 8l5 6 5-6M8 13h8M8 17h8"/></svg></span>
+                <div class="sm-txt"><span class="sm-num" id="sm-amount">—</span><label>总金额</label></div>
+              </div>
+              <div class="sm ring accent">
+                <span class="sm-ring" id="sm-quality-ring"><i></i></span>
+                <div class="sm-txt"><span class="sm-num" id="sm-quality">0%</span><label>数据完整度</label></div>
+              </div>
+            </div>
+
+            <div class="tables" id="tables">
+              <div class="block">
+                <h3 class="block-title">字段 <span class="bh-count" id="bh-fields">0</span>
+                  <label class="block-tools low-only" title="只看置信度低于 85% 及待补录的字段">
+                    <input type="checkbox" id="low-only" /><span>仅看待复核</span>
+                  </label>
+                </h3>
+                <div class="table-wrap">
+                  <table id="fields-table">
+                    <thead><tr><th class="ci"></th><th>字段</th><th>值</th><th class="cc">置信度</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="block" id="li-block" hidden>
+                <h3 class="block-title">明细行 <span class="bh-count" id="bh-li">0</span></h3>
+                <div class="table-wrap">
+                  <table id="li-table">
+                    <thead><tr><th>名称</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead>
+                    <tbody></tbody>
+                    <tfoot id="li-foot"></tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div class="block" id="checks-block" hidden>
+                <h3 class="block-title">数据校验 <span class="bh-count" id="bh-checks">0</span> <span class="muted vmuted">自动核对金额与税额一致性</span>
+                  <span class="block-tools">
+                    <button type="button" class="btn ghost xs" id="checks-copy">复制异常</button>
+                    <button type="button" class="btn ghost xs" id="checks-export">导出异常清单</button>
+                  </span>
+                </h3>
+                <div id="checks-list" class="checks-list"></div>
+              </div>
+            </div>
+
+            <div id="verify" class="verify" hidden>
+              <div class="block-title">
+                原文对照 <span class="bh-count" id="bh-verify">0</span>
+                <span class="muted vmuted">点击字段定位原文 · 点击原文反查字段</span>
+              </div>
+              <div id="page-tabs" class="page-tabs" hidden></div>
+              <div class="verify-grid">
+                <div class="v-src-wrap">
+                  <div class="v-src" id="v-src"></div>
+                </div>
+                <div class="v-map" id="v-map"></div>
+              </div>
+            </div>
+
+            <div class="actions-bar">
+              <span class="ab-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>导出与复制</span>
+              <div class="actions">
+                <button class="btn primary" data-act="copy-table">复制为表格</button>
+                <button class="btn" data-act="csv">导出 CSV</button>
+                <button class="btn" data-act="xlsx">导出 Excel</button>
+                <button class="btn" data-act="json">导出 JSON</button>
+                <button class="btn" data-act="copy">复制 JSON</button>
+                <button class="btn" data-act="report">核对报告</button>
+                <button class="btn" data-act="voucher">记账凭证</button>
+                <button class="btn" data-act="export-map">客户模板导出</button>
+                <button class="btn primary" data-act="package">交付包 ZIP</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>文档台 · 本地优先 <span class="ver" data-app-version>v1.2.0</span></span>
+      <span class="muted">数据不出本机 · 可离线 · 可自托管 · <kbd class="kbd-inline">?</kbd> 查看快捷键</span>
+    </footer>
+  </div>
+
+  <!-- 模板管理弹窗 -->
+  <div id="tpl-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="管理模板">
+      <div class="modal-head">
+        <h3>字段模板</h3>
+        <button class="modal-x" data-close="tpl-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="tpl-list" id="tpl-list"></div>
+        <div class="tpl-add">
+          <div class="tpl-add-row">
+            <input id="tpl-name" class="inp" placeholder="新模板名称，如「物流运单」" />
+            <button id="tpl-add-btn" class="btn primary xs">新增</button>
+          </div>
+          <textarea id="tpl-fields" class="inp area" rows="3" placeholder="每行一个字段，如：&#10;运单号&#10;发货方&#10;收货方&#10;运费"></textarea>
+          <p class="muted tpl-hint">新增后可在「单据类型」下拉中选用，并自动对齐解析结果。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量汇总弹窗 -->
+  <div id="summary-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="批量汇总">
+      <div class="modal-head">
+        <h3>批量汇总</h3>
+        <button class="modal-x" data-close="summary-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body" id="summary-body"></div>
+    </div>
+  </div>
+
+  <!-- 案卷 / 交付设置弹窗 -->
+  <div id="case-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="案卷设置">
+      <div class="modal-head">
+        <h3>案卷与交付设置</h3>
+        <button class="modal-x" data-close="case-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted case-intro">案卷信息会写入 Excel「交付信息」表、核对报告与交付包，便于按客户 / 会计期间归档交付。</p>
+        <div class="case-grid">
+          <label class="case-field"><span>案卷名称</span><input id="case-name" class="inp" placeholder="如：2026年11月 · 华东制造发票" /></label>
+          <label class="case-field"><span>会计期间</span><input id="case-period" class="inp" type="month" /></label>
+          <label class="case-field"><span>我方主体（购买方）</span><input id="case-entity" class="inp" placeholder="如：苏州某某科技有限公司" /></label>
+          <label class="case-field"><span>我方税号</span><input id="case-taxid" class="inp" placeholder="统一社会信用代码" /></label>
+          <label class="case-field"><span>复核人</span><input id="case-reviewer" class="inp" placeholder="如：张会计" /></label>
+          <label class="case-field"><span>备注</span><input id="case-note" class="inp" placeholder="交付说明 / 内部编号" /></label>
+        </div>
+        <div class="case-actions">
+          <button id="case-save" class="btn primary xs" type="button">保存案卷</button>
+          <span class="muted">保存后立即生效，已有结果无需重新解析。</span>
+        </div>
+
+        <div class="case-sec">
+          <h4>工作区备份</h4>
+          <p class="muted">一键导出全部结果、模板与设置；换机或清空浏览器后可恢复。</p>
+          <div class="case-row">
+            <button id="backup-export" class="btn xs" type="button">导出工作区 JSON</button>
+            <button id="backup-import-btn" class="btn xs" type="button">导入工作区</button>
+            <input id="backup-import" type="file" accept="application/json,.json" hidden />
+          </div>
+        </div>
+
+        <div class="case-sec">
+          <h4>本机磁盘工作区 <span id="ws-state" class="count">—</span></h4>
+          <p class="muted">结果与留痕自动落盘到 <code>data/workspace.db</code>：清空浏览器缓存、换浏览器都能接续。快照记录时间点，改错后可一键回滚。</p>
+          <div class="case-row">
+            <input id="snap-name" class="inp" placeholder="快照名称（可留空）" aria-label="快照名称" />
+            <button id="snap-create" class="btn primary xs" type="button">创建快照</button>
+            <button id="snap-refresh" class="btn ghost xs" type="button">刷新</button>
+          </div>
+          <div id="snap-meta" class="snap-meta"></div>
+          <div id="snap-list" class="snap-list"></div>
+        </div>
+
+        <div class="case-sec">
+          <h4>人工修正留痕 <span id="audit-count" class="count">0</span></h4>
+          <p class="muted">每次字段 / 明细修改都会记录时间、原值与新值，并写入导出底稿。</p>
+          <div class="case-row">
+            <button id="audit-export" class="btn xs" type="button">导出修正记录 CSV</button>
+            <button id="audit-clear" class="btn ghost xs" type="button">清空记录</button>
+          </div>
+          <div id="audit-list" class="audit-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 核对报告预览弹窗 -->
+  <div id="report-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card help-card" role="dialog" aria-modal="true" aria-label="核对报告">
+      <div class="modal-head">
+        <h3>核对报告 · A4 可打印</h3>
+        <button class="modal-x" data-close="report-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="case-actions report-actions">
+          <button id="report-print" class="btn primary xs" type="button">打印 / 另存为 PDF</button>
+          <button id="report-txt" class="btn xs" type="button">导出 TXT</button>
+          <span class="muted">打印时自动隐藏工作台界面，仅输出报告正文。</span>
+        </div>
+        <div id="report-body" class="report-preview"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 记账凭证弹窗 -->
+  <div id="voucher-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card help-card" role="dialog" aria-modal="true" aria-label="记账凭证">
+      <div class="modal-head">
+        <h3>记账凭证 · 对接财务软件</h3>
+        <button class="modal-x" data-close="voucher-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted case-intro">按「借费用 / 借进项税 / 贷往来」生成借贷凭证，服务端自动校验借贷平衡。科目名称可改成客户账套里的实际设置。</p>
+        <div class="case-grid">
+          <label class="case-field"><span>费用 / 采购科目</span><input id="v-expense" class="inp" value="管理费用" /></label>
+          <label class="case-field"><span>费用科目编码</span><input id="v-expense-code" class="inp" placeholder="如 6602（可留空）" /></label>
+          <label class="case-field"><span>进项税科目</span><input id="v-tax" class="inp" value="应交税费—应交增值税（进项税额）" /></label>
+          <label class="case-field"><span>进项税编码</span><input id="v-tax-code" class="inp" placeholder="如 222101（可留空）" /></label>
+          <label class="case-field"><span>往来科目</span><input id="v-payable" class="inp" value="应付账款" /></label>
+          <label class="case-field"><span>往来科目编码</span><input id="v-payable-code" class="inp" placeholder="如 2202（可留空）" /></label>
+          <label class="case-field"><span>凭证日期（留空取单据日期）</span><input id="v-date" class="inp" type="date" /></label>
+          <label class="case-field"><span>摘要模板</span><input id="v-memo" class="inp" value="{销售方} {发票号}" /></label>
+          <label class="case-field"><span>输出格式</span><select id="v-format" class="inp"><option value="general">通用凭证 CSV</option><option value="yonyou">用友列头</option><option value="kingdee">金蝶列头</option></select></label>
+          <label class="case-field"><span>凭证字</span><input id="v-word" class="inp" value="记" /></label>
+          <label class="case-field"><span>制单人</span><input id="v-maker" class="inp" placeholder="可留空" /></label>
+        </div>
+        <div class="case-sec">
+          <h4>科目方案 · 按关键词自动匹配科目</h4>
+          <div class="v-scheme-bar">
+            <select id="v-scheme" class="inp"></select>
+            <button id="v-scheme-new" class="btn ghost xs" type="button">新建方案</button>
+            <button id="v-scheme-save" class="btn xs" type="button" hidden>保存方案</button>
+            <button id="v-scheme-del" class="btn ghost xs" type="button" hidden>删除</button>
+          </div>
+          <div id="v-scheme-detail" hidden>
+            <div class="case-row"><label class="case-field"><span>方案名称</span><input id="v-scheme-name" class="inp" placeholder="如：太湖高尔夫账套" /></label></div>
+            <div id="v-rules" class="v-rules"></div>
+            <datalist id="v-account-codes"></datalist>
+            <datalist id="v-account-names"></datalist>
+            <div class="case-row v-rule-actions">
+              <button id="v-rule-add" class="btn ghost xs" type="button">＋ 添加规则</button>
+              <label class="btn ghost xs" for="v-rule-import">导入规则 CSV</label>
+              <input type="file" id="v-rule-import" accept=".csv,.txt" hidden />
+              <button id="v-rule-export" class="btn ghost xs" type="button">导出规则 CSV</button>
+            </div>
+            <div class="case-row v-rule-actions">
+              <label class="btn ghost xs" for="v-chart-import">导入科目表 CSV</label>
+              <input type="file" id="v-chart-import" accept=".csv,.txt" hidden />
+              <button id="v-chart-auto" class="btn xs" type="button">从科目表生成规则</button>
+              <span id="v-chart-info" class="muted">未导入科目表</span>
+            </div>
+            <p class="muted case-intro">规则按「明细名称 / 文件名 / 往来单位包含关键词」匹配：费用科目规则替换借方科目，往来科目规则替换贷方科目；首个命中生效。CSV 表头：关键词,范围,科目编码,科目名称。</p>
+            <p class="muted case-intro">科目表可直接吃财务软件导出的 CSV（UTF-8 / GBK 自动识别，需「科目编码 / 科目名称」两列）；科目名称如「管理费用—物业费」，末段自动作关键词，含「应付」自动判为往来科目。编码与名称输入支持自动补全与联动。</p>
+          </div>
+        </div>
+        <div class="case-row voucher-actions">
+          <label class="chk"><input type="checkbox" id="v-reviewed" /> 仅已复核单据</label>
+          <button id="v-preview" class="btn xs" type="button">预览凭证</button>
+          <button id="v-export" class="btn primary xs" type="button">导出凭证 CSV</button>
+        </div>
+        <div id="v-summary" class="v-summary"></div>
+        <div id="v-preview-box" class="voucher-preview" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 客户模板导出弹窗 -->
+  <div id="export-map-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card help-card" role="dialog" aria-modal="true" aria-label="客户模板导出">
+      <div class="modal-head">
+        <h3>客户模板导出 · 列映射</h3>
+        <button class="modal-x" data-close="export-map-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted case-intro">按客户 ERP 的导入列头导出数据：每列可取自单据字段、案卷信息、金额或固定值。可导入客户模板表头自动匹配，预览确认后再导出 CSV / Excel。</p>
+        <div class="case-sec">
+          <h4>导出模板</h4>
+          <div class="v-scheme-bar">
+            <select id="em-template" class="inp"></select>
+            <button id="em-new" class="btn ghost xs" type="button">新建模板</button>
+            <button id="em-save" class="btn xs" type="button" hidden>保存模板</button>
+            <button id="em-del-tpl" class="btn ghost xs" type="button" hidden>删除</button>
+          </div>
+          <div id="em-detail" hidden>
+            <div class="case-row">
+              <label class="case-field"><span>模板名称</span><input id="em-name" class="inp" placeholder="如：客户A-凭证导入模板" /></label>
+              <label class="chk"><input type="checkbox" id="em-total" /> Excel 末尾加合计行</label>
+            </div>
+            <div class="case-row v-rule-actions">
+              <button id="em-add" class="btn ghost xs" type="button">＋ 添加列</button>
+              <label class="btn ghost xs" for="em-import">导入客户模板 CSV 表头</label>
+              <input type="file" id="em-import" accept=".csv,.txt" hidden />
+              <button id="em-preview" class="btn xs" type="button">预览映射</button>
+            </div>
+            <datalist id="em-sources"></datalist>
+            <div id="em-columns" class="v-rules"></div>
+            <p class="muted case-intro">「取值来源」可直接写字段名或 <code>@token</code>：<code>@filename</code> 文件名 · <code>@invoice_no</code> 发票号 · <code>@seller</code> 销售方 · <code>@buyer</code> 购买方 · <code>@date</code> 日期 · <code>@total</code> 价税合计 · <code>@tax</code> 税额 · <code>@net</code> 未税金额 · <code>@li_sum</code> 明细合计 · <code>@upper</code> 金额大写 · <code>@reviewed</code> 复核状态 · <code>@case.period/entity/taxId/reviewer/name</code> 案卷信息。固定值留空时取来源值。</p>
+            <div id="em-preview-box" class="voucher-preview" hidden></div>
+            <div class="case-row">
+              <button id="em-csv" class="btn" type="button">导出 CSV</button>
+              <button id="em-xlsx" class="btn primary" type="button">导出 Excel</button>
+              <span id="em-info" class="muted"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 客户与案卷经营看板 -->
+  <div id="ops-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card help-card ops-card" role="dialog" aria-modal="true" aria-label="客户与案卷经营">
+      <div class="modal-head">
+        <h3>客户与案卷经营</h3>
+        <button class="modal-x" data-close="ops-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="ops-tabs">
+        <button class="ops-tab active" type="button" data-ops-tab="clients">客户档案</button>
+        <button class="ops-tab" type="button" data-ops-tab="cases">案卷看板</button>
+        <button class="ops-tab" type="button" data-ops-tab="overview">经营概览</button>
+      </div>
+      <div class="modal-body">
+        <!-- 客户档案 -->
+        <div id="ops-clients" class="ops-pane">
+          <div class="v-scheme-bar">
+            <button id="cl-new" class="btn xs" type="button">＋ 新建客户</button>
+            <span class="muted">客户档案会进入案卷、对账单与交付物</span>
+          </div>
+          <div id="cl-editor" class="case-sec" hidden>
+            <h4 id="cl-editor-title">新建客户</h4>
+            <div class="case-grid">
+              <label class="case-field"><span>客户名称</span><input id="cl-name" class="inp" placeholder="如：苏州太湖科技" /></label>
+              <label class="case-field"><span>纳税人识别号</span><input id="cl-taxId" class="inp" placeholder="税号" /></label>
+              <label class="case-field"><span>行业</span><input id="cl-industry" class="inp" placeholder="制造 / 物流 / 会计 / 律所" /></label>
+              <label class="case-field"><span>联系人</span><input id="cl-contact" class="inp" placeholder="对接会计" /></label>
+              <label class="case-field"><span>联系电话</span><input id="cl-phone" class="inp" placeholder="手机号" /></label>
+              <label class="case-field"><span>邮箱</span><input id="cl-email" class="inp" placeholder="用于发送对账单" /></label>
+              <label class="case-field"><span>默认计费方式</span><select id="cl-billing" class="inp"><option value="per_doc">按张计费</option><option value="monthly">按月计费</option><option value="project">项目计费</option></select></label>
+              <label class="case-field"><span>默认单价（元/张）</span><input id="cl-rate" class="inp" type="number" min="0" step="0.01" placeholder="如：12.5" /></label>
+              <label class="case-field"><span>默认月费 / 项目费（元）</span><input id="cl-fee" class="inp" type="number" min="0" step="0.01" placeholder="如：800" /></label>
+              <label class="case-field"><span>默认客户模板</span><select id="cl-map" class="inp"></select></label>
+              <label class="case-field"><span>默认凭证方案</span><select id="cl-scheme" class="inp"></select></label>
+            </div>
+            <div class="case-row">
+              <button id="cl-save" class="btn primary xs" type="button">保存客户</button>
+              <button id="cl-cancel" class="btn ghost xs" type="button">取消</button>
+            </div>
+          </div>
+          <div id="cl-list" class="ops-list"></div>
+        </div>
+
+        <!-- 案卷看板 -->
+        <div id="ops-cases" class="ops-pane" hidden>
+          <div class="v-scheme-bar">
+            <button id="kd-new" class="btn xs" type="button">＋ 新建案卷</button>
+            <span class="muted">案卷 = 一个客户的一个结算周期；切换后新解析的单据归入该案卷</span>
+          </div>
+          <div id="kd-editor" class="case-sec" hidden>
+            <h4 id="kd-editor-title">新建案卷</h4>
+            <div class="case-grid">
+              <label class="case-field"><span>案卷名称</span><input id="kd-name" class="inp" placeholder="如：太湖科技 2026-11" /></label>
+              <label class="case-field"><span>所属客户</span><select id="kd-client" class="inp"></select></label>
+              <label class="case-field"><span>会计期间</span><input id="kd-period" class="inp" placeholder="如：2026-11" /></label>
+              <label class="case-field"><span>状态</span><select id="kd-status" class="inp"><option value="active">进行中</option><option value="review">待复核</option><option value="delivered">已交付</option><option value="archived">已归档</option></select></label>
+              <label class="case-field"><span>计费方式</span><select id="kd-billing" class="inp"><option value="per_doc">按张计费</option><option value="monthly">按月计费</option><option value="project">项目计费</option></select></label>
+              <label class="case-field"><span>单价（元/张）</span><input id="kd-rate" class="inp" type="number" min="0" step="0.01" /></label>
+              <label class="case-field"><span>月费 / 项目费（元）</span><input id="kd-fee" class="inp" type="number" min="0" step="0.01" /></label>
+              <label class="case-field"><span>交付日期</span><input id="kd-delivered" class="inp" type="date" /></label>
+            </div>
+            <label class="case-field"><span>备注</span><input id="kd-note" class="inp" placeholder="交付说明、特殊约定" /></label>
+            <div class="case-row">
+              <button id="kd-save" class="btn primary xs" type="button">保存案卷</button>
+              <button id="kd-cancel" class="btn ghost xs" type="button">取消</button>
+            </div>
+          </div>
+          <div id="kd-list" class="ops-list"></div>
+        </div>
+
+        <!-- 经营概览 -->
+        <div id="ops-overview" class="ops-pane" hidden>
+          <div id="ops-kpis" class="ops-kpis"></div>
+          <div class="ops-grid">
+            <div class="ops-panel"><h4>客户计费额</h4><div id="ops-client-bars"></div></div>
+            <div class="ops-panel"><h4>期间趋势</h4><div id="ops-period-bars"></div></div>
+          </div>
+          <div class="case-sec">
+            <h4>服务对账单</h4>
+            <div class="v-scheme-bar">
+              <select id="st-client" class="inp"></select>
+              <input id="st-period" class="inp" placeholder="期间，如 2026-11" style="max-width:150px" />
+              <input id="st-name" class="inp" placeholder="对账单名称" style="max-width:180px" />
+              <button id="st-preview" class="btn xs" type="button">预览</button>
+              <button id="st-csv" class="btn ghost xs" type="button">导出 CSV</button>
+              <button id="st-xlsx" class="btn primary xs" type="button">导出 Excel</button>
+            </div>
+            <div id="st-box" class="voucher-preview" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 批量字段填充弹窗 -->
+  <div id="batch-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="批量填充字段">
+      <div class="modal-head">
+        <h3>批量填充字段</h3>
+        <button class="modal-x" data-close="batch-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted case-intro">给多份单据统一补录同一字段（如会计期间、归集部门、凭证号）。修改会逐份留痕并回退为待复核，可 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 一次撤销。</p>
+        <div class="case-grid">
+          <label class="case-field"><span>字段名称</span><input id="b-field" class="inp" list="b-field-options" placeholder="如：会计期间" /><datalist id="b-field-options"><option value="会计期间"></option><option value="归集部门"></option><option value="凭证号"></option><option value="购买方"></option><option value="备注"></option></datalist></label>
+          <label class="case-field"><span>填充值</span><input id="b-value" class="inp" placeholder="如：2026-11" /></label>
+          <label class="case-field"><span>作用范围</span><select id="b-scope" class="inp"><option value="all">全部已完成单据</option><option value="pending">仅待复核单据</option><option value="filtered">当前搜索结果</option></select></label>
+        </div>
+        <div class="case-row">
+          <span id="b-count" class="muted">将影响 0 份单据</span>
+          <button id="b-apply" class="btn primary xs" type="button">批量填充</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 帮助中心弹窗 -->
+  <div id="help-modal" class="modal" hidden>
+    <div class="modal-mask"></div>
+    <div class="modal-card help-card" role="dialog" aria-modal="true" aria-label="帮助与快捷键">
+      <div class="modal-head">
+        <h3>帮助与快捷键</h3>
+        <button class="modal-x" data-close="help-modal" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="help-hero">
+          <img class="help-mark" src="brand/logo-mark.svg" alt="文档台" width="46" height="46" />
+          <div class="help-hero-txt">
+            <strong>文档台 <span class="ver" data-app-version>v1.2.0</span></strong>
+            <p>本地优先的单据结构化工作台。拖入发票 / 单据，抽取字段与明细，核对后一键导出。数据全程不出本机。</p>
+          </div>
+        </div>
+
+        <div class="help-sec">
+          <h4>使用流程</h4>
+          <ol class="help-steps">
+            <li><b>导入</b> — 拖入文件、点击选择、导入文件夹，或直接 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴单据文字</li>
+            <li><b>核对</b> — 低置信度字段黄色标注，点单元格可内联修正，切「原文对照」逐页追溯出处</li>
+            <li><b>复核</b> — 修正任意值会自动取消复核并写入留痕；确认无误点「标记复核」，异常项可导出清单</li>
+            <li><b>交付</b> — 设置案卷后导出 Excel / 核对报告 / 记账凭证 / 交付包 ZIP（含底稿、CSV、报告、凭证、原文）；「客户模板导出」可按客户 ERP 列头自定义映射；≥2 份可汇总</li>
+            <li><b>经营</b> — 顶栏「客户与案卷」管理客户档案、多案卷、计费规则与工作量，查看经营 KPI，并导出服务对账单（CSV / Excel）</li>
+            <li><b>归档</b> — 结果自动落盘到本机 <code>data/workspace.db</code>，可创建时间点快照并一键回滚；也支持工作区 JSON 备份换机恢复</li>
+          </ol>
+        </div>
+
+        <div class="help-sec">
+          <h4>键盘快捷键</h4>
+          <div class="shortcut-grid">
+            <div class="sc-item"><span>打开文件</span><span><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
+            <div class="sc-item"><span>导入文件夹</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></span></div>
+            <div class="sc-item"><span>聚焦搜索</span><span><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+            <div class="sc-item"><span>导出 Excel</span><span><kbd>Ctrl</kbd><kbd>E</kbd></span></div>
+            <div class="sc-item"><span>合并导出</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></span></div>
+            <div class="sc-item"><span>批量汇总</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd></span></div>
+            <div class="sc-item"><span>标记 / 取消复核</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd></span></div>
+            <div class="sc-item"><span>案卷设置</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></span></div>
+            <div class="sc-item"><span>核对报告</span><span><kbd>Ctrl</kbd><kbd>P</kbd></span></div>
+            <div class="sc-item"><span>记账凭证</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>V</kbd></span></div>
+            <div class="sc-item"><span>批量填充字段</span><span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></span></div>
+            <div class="sc-item"><span>撤销 / 重做</span><span><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Y</kbd></span></div>
+            <div class="sc-item"><span>字段表 / 原文对照</span><span><kbd>Alt</kbd><kbd>1</kbd> / <kbd>2</kbd></span></div>
+            <div class="sc-item"><span>帮助</span><span><kbd>?</kbd></span></div>
+            <div class="sc-item"><span>关闭弹窗</span><span><kbd>Esc</kbd></span></div>
+          </div>
+          <p class="help-note">快捷键在输入框内输入文字时自动让位，不会干扰编辑。</p>
+        </div>
+
+        <div class="help-sec help-split">
+          <div>
+            <h4>支持格式</h4>
+            <p class="help-note">PDF（逐页）· Word · Excel · TXT · CSV · JSON · HTML · Markdown · <b>图片与扫描件</b>。扫描 PDF 和图片自动使用<b>本地 OCR</b>（Windows 内置引擎，零安装零费用；每页约 3–5 秒），识别后请用原文对照人工核对。</p>
+          </div>
+          <div>
+            <h4>数据与隐私</h4>
+            <p class="help-note">全部解析与 OCR 在本机完成，无第三方 API、无云端上传。结果同时保存在浏览器与本机 <code>data/workspace.db</code>，可在案卷设置中创建快照、回滚或导出 JSON 备份。</p>
+          </div>
+        </div>
+
+        <div class="help-sec brand-sec">
+          <h4>关于品牌</h4>
+          <div class="brand-card">
+            <img src="brand/logo-full.svg" alt="文档台 DOC DESK" width="252" height="70" />
+            <p class="help-note">「折角单据 → 长短数据行 → 复核勾」：把散乱单据变成可核对的结构化数据。原创矢量标志，无外部字体与图片依赖，可随交付物商用。</p>
+            <div class="swatches">
+              <span class="sw" style="--sw:#0E7C6B"><i></i>主色 #0E7C6B</span>
+              <span class="sw" style="--sw:#0A574B"><i></i>深墨 #0A574B</span>
+              <span class="sw" style="--sw:#43AF9B"><i></i>辅助 #43AF9B</span>
+              <span class="sw" style="--sw:#E3F1ED"><i></i>浅底 #E3F1ED</span>
+            </div>
+            <div class="brand-links">
+              <a href="brand/logo-mark.svg" target="_blank" rel="noopener">SVG 图标</a>
+              <a href="brand/logo-full.svg" target="_blank" rel="noopener">SVG 横版</a>
+              <a href="brand/logo-mark.png" download>PNG 图标</a>
+              <a href="brand/logo-full.png" download>PNG 横版</a>
+              <a href="favicon.ico" download>ICO</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打印专用容器：仅 window.print() 时可见 -->
+  <div id="print-area" aria-hidden="true"></div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
