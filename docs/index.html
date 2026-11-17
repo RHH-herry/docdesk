@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>文档台 DocDesk · 在线工作台</title>
-<link rel="icon" href="https://raw.githubusercontent.com/RHH-herry/docdesk/main/static/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230E7C6B'/%3E%3Cpath d='M28 19h29l17 17v42H28z' fill='white'/%3E%3Cpath d='M31 43h32v4h-32zm0 10h25v4H31zm0 10h18v4H31z' fill='%230E7C6B'/%3E%3C/svg%3E" type="image/svg+xml">
 <style>
   :root { --brand:#0E7C6B; --dark:#0A574B; --soft:#E3F1ED; --ink:#15261F; }
   * { box-sizing:border-box; }
@@ -35,7 +35,19 @@
 </head>
 <body>
   <main class="card">
-    <img class="mark" src="https://raw.githubusercontent.com/RHH-herry/docdesk/main/static/brand/logo-mark.svg" alt="文档台标志" onerror="this.style.display='none'">
+    <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="文档台标志">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#159183"/><stop offset=".55" stop-color="#0E7C6B"/><stop offset="1" stop-color="#0A574B"/></linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="24" fill="url(#g)"/>
+      <path d="M28 19h29l17 17v42a5 5 0 0 1-5 5H28a5 5 0 0 1-5-5V24a5 5 0 0 1 5-5z" fill="#fff"/>
+      <path d="M57 19l17 17H62a5 5 0 0 1-5-5V19z" fill="#D8ECE7"/>
+      <rect x="31" y="43" width="32" height="4.2" rx="2.1" fill="#0E7C6B"/>
+      <rect x="31" y="53.5" width="25" height="4.2" rx="2.1" fill="#2FA893" opacity=".8"/>
+      <rect x="31" y="64" width="18" height="4.2" rx="2.1" fill="#65C3AF" opacity=".75"/>
+      <circle cx="70" cy="72" r="14" fill="#0A574B" stroke="#fff" stroke-width="3"/>
+      <path d="M63.5 72.2l4.6 4.6 9.4-9.6" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
     <div class="kicker">DocDesk · 在线工作台</div>
     <h1>文档台</h1>
     <p>把一叠单据，变成可对账的业务底稿。<br>正在为你打开在线工作台……</p>
