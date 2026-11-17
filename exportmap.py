@@ -73,6 +73,9 @@ def guess_source(header: str) -> str:
     if not h:
         return ""
     rules = [
+        (r"发票代码|invoice.?code", "@field:发票代码"),
+        (r"校验码|check.?code", "@field:校验码"),
+        (r"开票人|开票员|drawer", "@field:开票人"),
         (r"发票号|票号|单据号|单号|编号|invoice.?no", "@invoice_no"),
         (r"销售方|供应商|卖方|收款方|往来单位", "@seller"),
         (r"购买方|买方|付款方|客户", "@buyer"),

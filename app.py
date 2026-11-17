@@ -17,21 +17,26 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
+import hashlib
 import io
 import json
 import os
 import re
+import time
 import zipfile
+from collections import OrderedDict
 from datetime import datetime
 from html.parser import HTMLParser
 from xml.etree import ElementTree as ET
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
+from starlette.concurrency import run_in_threadpool
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -53,6 +58,81 @@ app = FastAPI(title="文档智能台 DocIntel")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/brand", StaticFiles(directory=BRAND_DIR), name="brand")
+
+# ---------------------------------------------------------------------------
+# 安全与性能基线（v1.7）
+# ---------------------------------------------------------------------------
+MAX_UPLOAD_BYTES = int(os.environ.get("DOCINTEL_MAX_UPLOAD_MB", "40")) * 1024 * 1024
+MAX_TEXT_CHARS = int(os.environ.get("DOCINTEL_MAX_TEXT_CHARS", "2_000_000"))
+ALLOWED_EXT = {
+    ".pdf", ".docx", ".xlsx", ".html", ".htm", ".json", ".csv",
+    ".txt", ".md", ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff",
+}
+# 解析结果 LRU 缓存：同一文件重复上传不重复解析（按内容哈希）
+_PARSE_CACHE: "OrderedDict[str, tuple[float, dict]]" = OrderedDict()
+_PARSE_CACHE_MAX = 24
+_PARSE_LOCK = asyncio.Lock()
+# 健康检查缓存：Ollama 探测有 2s 超时，避免每次 health 都阻塞
+_HEALTH_CACHE: dict = {"at": 0.0, "data": None}
+_HEALTH_TTL = 5.0
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """统一加安全响应头；拦截明显恶意请求。"""
+    # 请求体大小上限（上传走 /api/extract 单独校验，这里挡其他 JSON 接口）
+    length = request.headers.get("content-length")
+    if length:
+        try:
+            if int(length) > MAX_UPLOAD_BYTES and request.url.path != "/api/extract":
+                return JSONResponse({"detail": "请求体过大"}, status_code=413)
+        except ValueError:
+            pass
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+        "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+        "base-uri 'none'; form-action 'self'"
+    )
+    return response
+
+
+def _validate_upload(filename: str, raw: bytes) -> None:
+    """上传前置校验：扩展名白名单 + 体积上限 + 非空。"""
+    ext = os.path.splitext((filename or "").lower())[1]
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(
+            status_code=415,
+            detail=f"不支持的文件类型 {ext or '(无扩展名)'}；"
+                   f"允许：{', '.join(sorted(ALLOWED_EXT))}",
+        )
+    if not raw:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大（{len(raw) // 1024 // 1024}MB），上限 "
+                   f"{MAX_UPLOAD_BYTES // 1024 // 1024}MB",
+        )
+
+
+def _cache_get(key: str):
+    hit = _PARSE_CACHE.get(key)
+    if hit:
+        _PARSE_CACHE.move_to_end(key)
+        return hit[1]
+    return None
+
+
+def _cache_put(key: str, value: dict) -> None:
+    _PARSE_CACHE[key] = (time.monotonic(), value)
+    _PARSE_CACHE.move_to_end(key)
+    while len(_PARSE_CACHE) > _PARSE_CACHE_MAX:
+        _PARSE_CACHE.popitem(last=False)
 
 
 def _decode(raw: bytes) -> str:
@@ -775,17 +855,30 @@ async def api_voucher(payload: dict):
     )
 
 
+def _health_data() -> dict:
+    """真正的健康检查逻辑，在线程池执行（Ollama 探测有 2s 超时）。"""
+    return {
+        "status": "ok",
+        "workspace": workspace_status(),
+        "ollama_available": OllamaExtractor().available(),
+        "ocr": engine_status(),
+    }
+
+
 @app.get("/api/health")
-def health():
-    ollama = OllamaExtractor().available()
-    return {"status": "ok", "workspace": workspace_status(), "ollama_available": ollama,
-            "ocr": engine_status()}
+async def health():
+    # 短 TTL 缓存：保活探测高频调用时不再每次阻塞 2 秒
+    now = time.monotonic()
+    if _HEALTH_CACHE["data"] is not None and now - _HEALTH_CACHE["at"] < _HEALTH_TTL:
+        return JSONResponse(_HEALTH_CACHE["data"])
+    data = await run_in_threadpool(_health_data)
+    _HEALTH_CACHE["at"] = now
+    _HEALTH_CACHE["data"] = data
+    return JSONResponse(data)
 
 
-@app.post("/api/extract")
-async def extract(file: UploadFile = File(...), mode: str = Form("auto")):
-    raw = await file.read()
-    filename = file.filename or "unknown"
+def _extract_sync(raw: bytes, filename: str, mode: str) -> dict:
+    """同步解析主体，运行在线程池，避免阻塞事件循环。"""
     doc = read_document(raw, filename)
     text, pages = doc["text"], doc["pages"]
 
@@ -798,12 +891,23 @@ async def extract(file: UploadFile = File(...), mode: str = Form("auto")):
             result = OllamaExtractor().extract(text, filename)
 
     payload = result.to_dict()
-    # 给字段与明细补上所在页码，供前端逐页对照定位
+    # 页码索引一次构建，避免逐字段全页扫描（O(字段×页) → O(页+字段)）
+    page_index: dict[str, int] = {}
+    for p in pages:
+        for line in (p.get("text") or "").splitlines():
+            line = line.strip()
+            if len(line) >= 4:
+                page_index.setdefault(line, p["page"])
     for f, fd in zip(result.fields, payload["fields"]):
-        fd["page"] = locate_page(f.source, pages)
+        src = (f.source or "").strip()
+        fd["page"] = page_index.get(src) or locate_page(src, pages)
     for it in payload["line_items"]:
-        it["page"] = locate_page(it.get("source"), pages)
+        src = (it.get("source") or "").strip()
+        it["page"] = page_index.get(src) or locate_page(src, pages)
 
+    # 限制回传体积，避免超大原文拖垮前端与网络
+    if len(text) > MAX_TEXT_CHARS:
+        text = text[:MAX_TEXT_CHARS] + "\n…[内容过长已截断]"
     payload["filename"] = filename
     payload["char_count"] = len(text)
     payload["raw_text"] = text
@@ -812,6 +916,32 @@ async def extract(file: UploadFile = File(...), mode: str = Form("auto")):
     payload["source_type"] = doc["source_type"]
     payload["ocr_used"] = doc.get("ocr_used", False)
     payload["warnings"] = doc["warnings"]
+    return payload
+
+
+@app.post("/api/extract")
+async def extract(file: UploadFile = File(...), mode: str = Form("auto")):
+    started = time.monotonic()
+    raw = await file.read()
+    filename = file.filename or "unknown"
+    _validate_upload(filename, raw)
+
+    # 缓存键：内容哈希 + 文件名后缀 + 模式，命中则直接返回（深拷贝避免调用方串改）
+    import copy
+    key = hashlib.sha256(raw).hexdigest() + "|" + filename.lower()[-8:] + "|" + mode
+    async with _PARSE_LOCK:
+        cached = _cache_get(key)
+    if cached is not None:
+        result = copy.deepcopy(cached)
+        result["cache_hit"] = True
+        result["elapsed_ms"] = round((time.monotonic() - started) * 1000, 1)
+        return JSONResponse(result)
+
+    payload = await run_in_threadpool(_extract_sync, raw, filename, mode)
+    payload["cache_hit"] = False
+    payload["elapsed_ms"] = round((time.monotonic() - started) * 1000, 1)
+    async with _PARSE_LOCK:
+        _cache_put(key, payload)
     return JSONResponse(payload)
 
 

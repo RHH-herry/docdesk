@@ -47,7 +47,7 @@ const IS_FILE = location.protocol === "file:";
 /* 在线试用模式：服务端不落盘，工作区只保存在当前浏览器，避免不同访客串数据。 */
 const IS_ONLINE = !IS_FILE && !/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(location.hostname);
 const NO_SERVER_WS = IS_FILE || IS_ONLINE;
-const APP_VERSION = "1.6.0";
+const APP_VERSION = "1.7.0";
 
 const TEMPLATES = {
   general: { name: "通用", fields: [] },
@@ -59,8 +59,13 @@ const TEMPLATES = {
     { key: "tax_id", label: "纳税人识别号" },
     { key: "bank_account", label: "开户行及账号" },
     { key: "total", label: "价税合计" },
+    { key: "net_amount", label: "不含税金额" },
     { key: "tax", label: "税额" },
     { key: "tax_rate", label: "税率" },
+    { key: "invoice_code", label: "发票代码" },
+    { key: "check_code", label: "校验码" },
+    { key: "drawer", label: "开票人" },
+    { key: "remark", label: "备注" },
   ] },
   receipt: { name: "收据", fields: [
     { key: "invoice_no", label: "收据编号" },
@@ -620,22 +625,43 @@ function fmtSize(bytes) {
 
 function handleFiles(fileList) {
   if (IS_FILE) { toast("预览模式：请运行 python app.py 启动本地服务后解析真实文件"); return; }
-  const allowed = /\.(pdf|txt|md|csv|json|html?|docx?|xlsx?)$/i;
-  let count = 0;
+  const allowed = /\.(pdf|txt|md|csv|json|html?|docx?|xlsx?|png|jpe?g|bmp|webp|tiff?)$/i;
+  const maxBytes = 40 * 1024 * 1024;
+  const added = [];
+  let skipped = 0;
   for (const file of fileList) {
-    if (file.name && !allowed.test(file.name)) continue;
+    if (file.name && !allowed.test(file.name)) { skipped++; continue; }
+    if (file.size > maxBytes) { skipped++; continue; }
     const item = { id: ++state.seq, name: file.name, size: file.size, status: "parsing", data: null, file, tpl: state.defaultTpl, caseId: currentCaseId(), fromHistory: false };
     state.queue.push(item);
-    renderQueue();
-    // 第一份文件选中并显示骨架屏，同时必须对每一份都真正发起解析
-    // （旧逻辑把首个文件只交给 selectItem，会永远停在「解析中」）
-    if (state.selectedId === null) selectItem(item.id);
-    processItem(item);
-    count++;
+    added.push(item);
   }
-  if (count === 0) toast("没有可解析的文件（支持 PDF · Word · Excel · TXT · CSV · JSON · HTML）");
+  // 批量入队后只重绘一次（原逻辑每份都全量重绘，20 份会重绘 20+ 次）
+  if (added.length) {
+    renderQueue();
+    if (state.selectedId === null) selectItem(added[0].id);
+    // 限制并发：避免几十份文件同时打满浏览器连接与服务端线程池
+    runPool(added, 4, processItem);
+  }
+  if (!added.length) toast(skipped
+    ? "这些文件不支持或超过 40MB（支持 PDF · Word · Excel · 图片 · TXT · CSV · JSON · HTML）"
+    : "没有可解析的文件（支持 PDF · Word · Excel · 图片 · TXT · CSV · JSON · HTML）");
   fileInput.value = "";
   folderInput.value = "";
+}
+
+/* 轻量并发池：按限流数执行异步任务，全部完成后 resolve。 */
+async function runPool(items, limit, worker) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      try { await worker(item); } catch (e) {
+        item.status = "error"; item.error = String(e.message || e); renderQueue();
+      }
+    }
+  });
+  await Promise.all(runners);
 }
 
 /* 按解析结果自动对齐单据类型：避免上传发票却停在「通用」模板，
@@ -657,9 +683,16 @@ async function processItem(item) {
   const fd = new FormData();
   fd.append("file", item.file);
   fd.append("mode", modeSelect.value);
+  const controller = new AbortController();
+  // 单份文件解析超时 120 秒（扫描件 OCR 可能较慢），避免永久挂在「解析中」
+  const timer = setTimeout(() => controller.abort(), 120000);
   try {
-    const resp = await fetch("api/extract", { method: "POST", body: fd });
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const resp = await fetch("api/extract", { method: "POST", body: fd, signal: controller.signal });
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = (await resp.json()).detail || ""; } catch (e) {}
+      throw new Error(detail || ("HTTP " + resp.status));
+    }
     item.data = await resp.json();
     item.status = "done";
     if (!item.tplLocked) {
@@ -673,7 +706,10 @@ async function processItem(item) {
     syncClearBtn();
   } catch (err) {
     item.status = "error";
-    item.error = String(err.message || err);
+    item.error = err.name === "AbortError"
+      ? "解析超时（超过 120 秒），请重试或改用更小的文件" : String(err.message || err);
+  } finally {
+    clearTimeout(timer);
   }
   renderQueue();
   if (state.selectedId === item.id) selectItem(item.id);
@@ -753,6 +789,7 @@ function renderResult(item) {
   bits.push(fieldsN + " 字段 · " + liN + " 明细");
   if (lineCount) bits.push("原文 " + lineCount + " 行");
   if (d.page_count > 1) bits.push("共 " + d.page_count + " 页");
+  if (typeof d.elapsed_ms === "number") bits.push('<span title="服务端解析耗时">' + d.elapsed_ms + " ms" + (d.cache_hit ? " · 缓存" : "") + "</span>");
   if (d.ocr_used || d.source_type === "image") bits.push('<span class="ocr-tag" title="本单据经本地 OCR 识别，请以原文对照人工核对">OCR</span>');
   const metaEl = document.getElementById("r-meta");
   if (metaEl) metaEl.innerHTML =

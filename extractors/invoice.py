@@ -39,10 +39,17 @@ class InvoiceExtractor(Extractor):
             r"(\d{4}\s*[-/年.]\s*\d{1,2}\s*[-/月.]\s*\d{1,2})",
             text, "日期", "date", 0.85, re.IGNORECASE))
         # 价税合计 / 总金额
-        fields.append(self._field(
+        # 中文发票常见格式：「价税合计（大写）…（小写）¥2120.00」，
+        # 大写金额夹在中间会打断普通正则，故先单独匹配「（小写）」后的金额。
+        total_field = self._field(
             r"(?:价税合计|合计金额|总金额|总计|金额合计|grand\s*total|total\s*amount|"
             r"amount\s*due|total\s*due|total)\s*[:：]?\s*[¥$￥]?\s*([\d,]+\.\d{2})",
-            text, "价税合计", "total", 0.9, re.IGNORECASE))
+            text, "价税合计", "total", 0.9, re.IGNORECASE)
+        if total_field is None:
+            total_field = self._field(
+                r"[(（]?\s*小写\s*[)）]?\s*[¥￥$]?\s*([\d,]+\.\d{2})",
+                text, "价税合计", "total", 0.88, re.IGNORECASE)
+        fields.append(total_field)
         # 税额
         fields.append(self._field(
             r"(?:税额|增值税额|tax\s*amount|vat)\s*[:：]?\s*[¥$￥]?\s*([\d,]+\.\d{2})",
@@ -66,6 +73,26 @@ class InvoiceExtractor(Extractor):
         fields.append(self._field(
             r"(?:账号|银行账号|account\s*(?:no|number)?)\s*[:：]?\s*([0-9]{10,25})",
             text, "银行账号", "bank_account", 0.85, re.IGNORECASE))
+        # 不含税金额（须在「价税合计」之外单独识别，供凭证拆分借贷）
+        fields.append(self._field(
+            r"(?:不含税金额|金额合计|净额|un taxed|net\s*amount|amount\s*excl)\s*[:：]?\s*[¥$￥]?\s*([\d,]+\.\d{2})",
+            text, "不含税金额", "net_amount", 0.82, re.IGNORECASE))
+        # 发票代码（旧版发票 10/12 位）
+        fields.append(self._field(
+            r"(?:发票代码|invoice\s*code)\s*[:：]?\s*(\d{10,12})",
+            text, "发票代码", "invoice_code", 0.9, re.IGNORECASE))
+        # 校验码（末尾 20 位）
+        fields.append(self._field(
+            r"(?:校验码|check\s*code)\s*[:：]?\s*([0-9 ]{20,25})",
+            text, "校验码", "check_code", 0.8, re.IGNORECASE))
+        # 开票人
+        fields.append(self._field(
+            r"(?:开票人|drawer|issued\s*by|开票员)\s*[:：]?\s*([^\n，,]{2,20})",
+            text, "开票人", "drawer", 0.72, re.IGNORECASE))
+        # 备注
+        fields.append(self._field(
+            r"(?:备注|remark|note)\s*[:：]\s*([^\n]{2,80})",
+            text, "备注", "remark", 0.7, re.IGNORECASE))
 
         fields = [f for f in fields if f is not None]
 
